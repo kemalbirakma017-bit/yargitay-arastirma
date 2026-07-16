@@ -1,12 +1,11 @@
 """
-fastmcp.app / FastMCP Cloud giriş noktası.
+FastMCP Cloud giriş noktası.
 
-Deploy sırasında "entrypoint" olarak şunu ver:   main.py:mcp
+Deploy entrypoint:  main.py:mcp   (veya doğrudan server.py:mcp)
 
-Bu dosya yalnızca paket içindeki sunucuyu dışarı açar; tüm mantık
-yargitay_mcp/ klasöründedir.
+Tüm mantık server.py içindedir; bu dosya yalnızca sunucuyu dışarı açar.
 """
-from yargitay_mcp.server import mcp
+from server import mcp
 
 __all__ = ["mcp"]
 
