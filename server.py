@@ -470,10 +470,20 @@ async def tum_kaynaklarda_karar_ara(aranan_kelime: str, daire: str = "",
     """
     if not aranan_kelime.strip():
         raise ValueError("aranan_kelime boş olamaz.")
-    yargitay = await _do_search(
-        aranan_kelime=aranan_kelime, daire=daire,
-        sayfa=1, sayfa_boyutu=min(100, max(1, int(sonuc_sayisi))),
-    )
+    try:
+        yargitay = await _do_search(
+            aranan_kelime=aranan_kelime, daire=daire,
+            sayfa=1, sayfa_boyutu=min(100, max(1, int(sonuc_sayisi))),
+        )
+        yargitay_durum = {"durum": "başarılı", "sonuc": yargitay}
+    except Exception as exc:
+        # Bir kaynağın hatası diğer kaynağın sorgulanmasını engellememelidir.
+        yargitay_durum = {
+            "durum": "hata",
+            "hata_turu": type(exc).__name__,
+            "mesaj": str(exc),
+        }
+
     try:
         bedesten = await _bedesten.search(aranan_kelime)
         bedesten_durum = {"durum": "başarılı", "sonuc": bedesten}
@@ -488,7 +498,7 @@ async def tum_kaynaklarda_karar_ara(aranan_kelime: str, daire: str = "",
     return {
         "sorgu": aranan_kelime,
         "kaynaklar": {
-            "yargitay": {"durum": "başarılı", "sonuc": yargitay},
+            "yargitay": yargitay_durum,
             "bedesten": bedesten_durum,
         },
         "not": "Kaynak sonuçları birbirinden ayrı gösterilir; aynı karar oldukları varsayılmaz.",
