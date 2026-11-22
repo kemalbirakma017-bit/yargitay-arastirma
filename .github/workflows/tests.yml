@@ -18,3 +18,4 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m py_compile server.py webapp.py mevzuat_kaynak.py test_mock.py
       - run: python test_mock.py
+      - run: python test_genel_kurul.py
