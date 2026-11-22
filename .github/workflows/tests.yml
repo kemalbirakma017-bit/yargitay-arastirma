@@ -16,6 +16,7 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt
-      - run: python -m py_compile server.py webapp.py mevzuat_kaynak.py test_mock.py test_genel_kurul.py
+      - run: python -m py_compile server.py webapp.py mevzuat_kaynak.py test_mock.py test_genel_kurul.py test_birlesik_e2e.py
       - run: python test_mock.py
       - run: python test_genel_kurul.py
+      - run: python test_birlesik_e2e.py
