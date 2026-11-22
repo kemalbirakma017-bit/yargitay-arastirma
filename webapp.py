@@ -102,15 +102,20 @@ async def ara(data: dict, ok: bool = Depends(yetki)):
         return await _do_search(
             aranan_kelime=str(data.get("aranan_kelime", "")),
             daire=str(data.get("daire", "")),
+            esas_yil=str(data.get("esas_yil", "")),
+            karar_yil=str(data.get("karar_yil", "")),
+            baslangic_tarihi=str(data.get("baslangic_tarihi", "")),
+            bitis_tarihi=str(data.get("bitis_tarihi", "")),
+            sayfa=int(data.get("sayfa", 1)),
             sayfa_boyutu=int(data.get("sayfa_boyutu", 20)),
         )
-  except Exception as e:
-    import logging
-    logging.exception("Yargitay arama hatasi")
-    raise HTTPException(
-        status_code=502,
-        detail=f"{type(e).__name__}: {e!r}"
-    )
+    except Exception as e:
+        import logging
+        logging.exception("Yargitay arama hatasi")
+        raise HTTPException(
+            status_code=502,
+            detail=f"{type(e).__name__}: {e!r}"
+        )
 @app.get("/karar/{karar_id}")
 async def karar(karar_id: str, ok: bool = Depends(yetki)):
     if not karar_id.isdigit():

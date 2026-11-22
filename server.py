@@ -451,6 +451,77 @@ async def yargitay_karar_metni(karar_id: str) -> dict:
     }
 
 
+
+
+# Bedesten adaptörü: istek şeması doğrulanana kadar yalnızca açıkça
+# yapılandırılmış JSON şablonlarıyla çalışır; tahmini payload göndermez.
+from mevzuat_kaynak import BedestenClient, BedestenConfigurationError
+
+_bedesten = BedestenClient()
+
+
+@mcp.tool
+async def tum_kaynaklarda_karar_ara(aranan_kelime: str, daire: str = "",
+                                    sonuc_sayisi: int = 20) -> dict:
+    """Yargıtay ve yapılandırılmış Bedesten kaynaklarını ayrı ayrı arar.
+
+    Bedesten araması, doğrulanmış istek şablonları ortam değişkenleriyle
+    tanımlandığında etkinleşir. Her kaynağın sonucu ayrı tutulur.
+    """
+    if not aranan_kelime.strip():
+        raise ValueError("aranan_kelime boş olamaz.")
+    try:
+        yargitay = await _do_search(
+            aranan_kelime=aranan_kelime, daire=daire,
+            sayfa=1, sayfa_boyutu=min(100, max(1, int(sonuc_sayisi))),
+        )
+        yargitay_durum = {"durum": "başarılı", "sonuc": yargitay}
+    except Exception as exc:
+        # Bir kaynağın hatası diğer kaynağın sorgulanmasını engellememelidir.
+        yargitay_durum = {
+            "durum": "hata",
+            "hata_turu": type(exc).__name__,
+            "mesaj": str(exc),
+        }
+
+    try:
+        bedesten = await _bedesten.search(aranan_kelime)
+        bedesten_durum = {"durum": "başarılı", "sonuc": bedesten}
+    except BedestenConfigurationError as exc:
+        bedesten_durum = {"durum": "yapılandırılmadı", "uyari": str(exc)}
+    except Exception as exc:
+        bedesten_durum = {
+            "durum": "hata",
+            "hata_turu": type(exc).__name__,
+            "mesaj": str(exc),
+        }
+    return {
+        "sorgu": aranan_kelime,
+        "kaynaklar": {
+            "yargitay": yargitay_durum,
+            "bedesten": bedesten_durum,
+        },
+        "not": "Kaynak sonuçları birbirinden ayrı gösterilir; aynı karar oldukları varsayılmaz.",
+    }
+
+
+@mcp.tool
+async def karar_metni(kaynak: str, karar_id: str) -> dict:
+    """Kaynak adı ve karar/belge kimliğiyle karar metnini getirir.
+
+    kaynak: 'yargitay' veya 'bedesten'. Bedesten belge kimliği, arama
+    sonucundaki documentId değeridir; tam metin varsayılan Bedesten şemasıyla alınır.
+    """
+    kaynak = kaynak.strip().lower()
+    karar_id = str(karar_id).strip()
+    if kaynak == "yargitay":
+        return await yargitay_karar_metni(karar_id)
+    if kaynak == "bedesten":
+        if not karar_id:
+            raise ValueError("karar_id boş olamaz.")
+        return await _bedesten.document(karar_id)
+    raise ValueError("kaynak 'yargitay' veya 'bedesten' olmalıdır.")
+
 if __name__ == "__main__":
     transport = os.environ.get("MCP_TRANSPORT", "http")
     if transport == "stdio":

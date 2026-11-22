@@ -68,3 +68,20 @@ MCP_TRANSPORT=stdio python server.py   # stdio modunda (tek makine) çalıştır
 Kararlar Yargıtay'ın kamuya açık platformundan alınır; kişisel veri içerebilen
 karar metinlerinin işlenmesinde KVKK ve platformun kullanım koşullarına uyum
 kullanıcının sorumluluğundadır.
+
+
+## Birleşik kaynaklar (geliştirme dalı)
+
+- `tum_kaynaklarda_karar_ara`: Yargıtay sonuçlarını ve Bedesten sonucunu
+  ayrı kaynak başlıkları altında döndürür.
+- `karar_metni`: `kaynak="yargitay"` veya `kaynak="bedesten"` ile metin
+  isteme yönlendirmesi yapar.
+- Bedesten arama gövdesi, kamuya açık bir istemci uygulamasında görülen
+  şemayla varsayılan olarak hazırlanır; bu resmî API dokümantasyonu veya
+  canlı doğrulama değildir. Gerekirse `BEDSTEN_SEARCH_PAYLOAD_JSON` ile
+  değiştirilebilir ve içinde `${query}` yer tutucusu bulunmalıdır.
+  Belge içeriği uç noktasının gövdesi doğrulanmadığından
+  `BEDSTEN_CONTENT_PAYLOAD_JSON` ortam değişkeni zorunludur; JSON şablonunda
+  `${document_id}` yer tutucusu bulunmalıdır.
+- Bu nedenle yalnızca mock testlerinin geçmesi Bedesten'den canlı karar
+  alınabildiği anlamına gelmez. Canlı doğrulama ayrı yapılmalıdır.

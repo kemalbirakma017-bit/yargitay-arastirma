@@ -1,0 +1,86 @@
+name: Bedesten canlı tanılama (kontrollü onay)
+
+# Canlı istek yalnızca canli-onay dalında, commit mesajı tam olarak
+# "CANLI-ONAY: EVET" ve ONAY.txt içeriği EVET ise gönderilir.
+# En fazla iki POST: arama ve ilk bulunan kararın tam metni.
+# Kimlik bilgisi gönderilmez; yönlendirme ve tekrar deneme yapılmaz.
+
+on:
+  push:
+    branches:
+      - canli-onay
+
+permissions:
+  contents: read
+
+jobs:
+  canli-tanilama:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Depoyu al
+        uses: actions/checkout@v4
+
+      - name: Açık onay kapısını doğrula
+        shell: bash
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/canli-onay" ]; then
+            echo "Yanlış dal. Canlı istek gönderilmedi."
+            exit 1
+          fi
+          if [ "$COMMIT_MESSAGE" != "CANLI-ONAY: EVET" ]; then
+            echo "Commit mesajı açık onayla eşleşmiyor. Canlı istek gönderilmedi."
+            exit 1
+          fi
+          if [ ! -f ONAY.txt ] || [ "$(cat ONAY.txt)" != "EVET" ]; then
+            echo "ONAY.txt bulunamadı veya içeriği tam olarak EVET değil. Canlı istek gönderilmedi."
+            exit 1
+          fi
+          echo "Dal, commit mesajı ve ONAY.txt doğrulandı."
+
+      - name: Python kurulumu
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Önceki raporları temizle
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf tools/rapor_* guvenli
+          mkdir -p guvenli
+
+      - name: Canlı tanılama (en fazla 2 POST)
+        id: tanilama
+        shell: bash
+        run: python tools/bedesten_tanilama.py --canli
+
+      - name: Başarı ölçütlerini doğrula ve raporu hazırla
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p guvenli
+          report="$(find tools -maxdepth 2 -type f -path 'tools/rapor_*/rapor.txt' -print -quit || true)"
+          if [ -z "$report" ]; then
+            echo "Rapor bulunamadı; tanılama çalışmamış veya rapor üretmemiş olabilir." > guvenli/rapor.txt
+            echo "Tanılama raporu bulunamadı." >&2
+            exit 1
+          fi
+          cp "$report" guvenli/rapor.txt
+          grep -Fq "MOD: CANLI" guvenli/rapor.txt
+          grep -Fq "Karar listesi: BULUNDU" guvenli/rapor.txt
+          grep -Eq "Tam metin BASE64 çözüldü: [1-9][0-9]* karakter" guvenli/rapor.txt
+          grep -Fq "SONUÇ: BAŞARILI" guvenli/rapor.txt
+
+      - name: Güvenli raporu yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bedesten-rapor-${{ github.run_id }}
+          path: guvenli/rapor.txt
+          if-no-files-found: warn
+          retention-days: 7

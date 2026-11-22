@@ -81,3 +81,66 @@ async def main():
     print("ALL TESTS PASSED")
 
 asyncio.run(main())
+
+
+# Bedesten adaptörünün şema yokken tahmini istek göndermediğini doğrula.
+async def test_bedesten_default_content_template():
+    import os
+    from mevzuat_kaynak import _DEFAULT_CONTENT_TEMPLATE, _load_template
+    old = os.environ.pop("BEDSTEN_CONTENT_PAYLOAD_JSON", None)
+    try:
+        body = _load_template(
+            "BEDSTEN_CONTENT_PAYLOAD_JSON", "${document_id}", "test-id",
+            default=_DEFAULT_CONTENT_TEMPLATE,
+        )
+        assert body == {"data": {"documentId": "test-id"}}
+    finally:
+        if old is not None:
+            os.environ["BEDSTEN_CONTENT_PAYLOAD_JSON"] = old
+
+
+
+# Bedesten payload ve sonuç normalizasyonu: dış ağa çıkmadan test edilir.
+def test_bedesten_payload_and_result_normalization():
+    import os
+    from mevzuat_kaynak import _DEFAULT_SEARCH_TEMPLATE, _extract_items, _extract_total, _load_template
+    old = os.environ.pop("BEDSTEN_SEARCH_PAYLOAD_JSON", None)
+    try:
+        body = _load_template(
+            "BEDSTEN_SEARCH_PAYLOAD_JSON", "${query}", ' "içtihat" ',
+            default=_DEFAULT_SEARCH_TEMPLATE,
+        )
+        assert body["data"]["phrase"] == ' "içtihat" '
+        assert body["data"]["itemTypeList"] == ["YARGITAYKARARI"]
+        payload = {"data": {"total": 17, "emsalKararList": [{"documentId": "abc"}]}}
+        items = _extract_items(payload)
+        assert len(items) == 1 and items[0]["documentId"] == "abc"
+        assert _extract_total(payload, items) == 17
+    finally:
+        if old is not None:
+            os.environ["BEDSTEN_SEARCH_PAYLOAD_JSON"] = old
+
+
+
+
+def test_bedesten_extractor_ignores_unrecognized_arrays():
+    from mevzuat_kaynak import _extract_items
+    # Bir metadata listesi, karar listesiymiş gibi sunulmamalı.
+    payload = {"data": {"facets": [{"name": "daire", "count": 5}]}}
+    assert _extract_items(payload) == []
+    # Bilinen alanlar varsa sabit öncelikle karar kayıtları alınır.
+    payload = {
+        "data": {
+            "facets": [{"name": "daire"}],
+            "emsalKararList": [{"documentId": "decision-1"}],
+        }
+    }
+    assert _extract_items(payload) == [{"documentId": "decision-1"}]
+
+
+if __name__ == "__main__":
+    asyncio.run(test_bedesten_default_content_template())
+    test_bedesten_payload_and_result_normalization()
+    test_bedesten_extractor_ignores_unrecognized_arrays()
+    print("BEDSTEN MOCK TESTS PASSED")
+
