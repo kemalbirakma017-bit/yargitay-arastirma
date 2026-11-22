@@ -451,17 +451,6 @@ async def yargitay_karar_metni(karar_id: str) -> dict:
     }
 
 
-if __name__ == "__main__":
-    transport = os.environ.get("MCP_TRANSPORT", "http")
-    if transport == "stdio":
-        mcp.run()
-    else:
-        mcp.run(
-            transport="http",
-            host="0.0.0.0",
-            port=int(os.environ.get("PORT", "8000")),
-            path=os.environ.get("MCP_PATH", "/mcp"),
-        )
 
 
 # Bedesten adaptörü: istek şeması doğrulanana kadar yalnızca açıkça
@@ -522,3 +511,15 @@ async def karar_metni(kaynak: str, karar_id: str) -> dict:
             raise ValueError("karar_id boş olamaz.")
         return await _bedesten.document(karar_id)
     raise ValueError("kaynak 'yargitay' veya 'bedesten' olmalıdır.")
+
+if __name__ == "__main__":
+    transport = os.environ.get("MCP_TRANSPORT", "http")
+    if transport == "stdio":
+        mcp.run()
+    else:
+        mcp.run(
+            transport="http",
+            host="0.0.0.0",
+            port=int(os.environ.get("PORT", "8000")),
+            path=os.environ.get("MCP_PATH", "/mcp"),
+        )
