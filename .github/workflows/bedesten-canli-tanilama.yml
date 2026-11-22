@@ -1,39 +1,36 @@
-name: Bedesten canlı tanılama (manuel)
+name: Bedesten canlı tanılama (kontrollü onay)
 
-# Yalnızca elle başlatılır. Girdi EVET değilse canlı istek gönderilmez.
-# En fazla iki POST: arama ve ilk bulunan kararın içeriği.
-# Cookie/Authorization gönderilmez; yönlendirme izlenmez; tekrar deneme yapılmaz.
-# Artifact yalnızca bu çalıştırmada üretilen raporu içerir.
+# Canlı istek yalnızca canli-onay dalına, tam olarak
+# "CANLI-ONAY: EVET" commit mesajıyla ONAY.txt eklenince çalışır.
+# En fazla iki POST: karar arama ve bulunan ilk kararın tam metni.
+# Kimlik bilgisi gönderilmez; yönlendirme ve tekrar deneme yapılmaz.
 
 on:
-  workflow_dispatch:
-    inputs:
-      onay:
-        description: "Canlı Bedesten isteğini başlatmayı onaylıyorum; EVET yazın"
-        required: true
-        type: string
-        default: ""
+  push:
+    branches:
+      - canli-onay
 
 permissions:
   contents: read
 
 jobs:
   canli-tanilama:
+    if: github.ref == 'refs/heads/canli-onay' && github.event.head_commit.message == 'CANLI-ONAY: EVET'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Onay kapısı
-        shell: bash
-        env:
-          ONAY: ${{ inputs.onay }}
-        run: |
-          if [ "$ONAY" != "EVET" ]; then
-            echo "Onay verilmedi. Canlı istek gönderilmedi."
-            exit 1
-          fi
-
       - name: Depoyu al
         uses: actions/checkout@v4
+
+      - name: Açık onay dosyasını doğrula
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f ONAY.txt ] || [ "$(cat ONAY.txt)" != "EVET" ]; then
+            echo "ONAY.txt bulunamadı veya içeriği tam olarak EVET değil. Canlı istek gönderilmedi."
+            exit 1
+          fi
+          echo "Dal, commit mesajı ve ONAY.txt doğrulandı."
 
       - name: Python kurulumu
         uses: actions/setup-python@v5
@@ -43,21 +40,24 @@ jobs:
       - name: Önceki raporları temizle
         shell: bash
         run: |
+          set -euo pipefail
           rm -rf tools/rapor_* guvenli
           mkdir -p guvenli
 
-      - name: Canlı tanılama (en fazla 2 istek)
+      - name: Canlı tanılama (en fazla 2 POST)
         id: tanilama
         shell: bash
         run: python tools/bedesten_tanilama.py --canli
 
-      - name: Başarı ölçütlerini doğrula
+      - name: Başarı ölçütlerini doğrula ve raporu hazırla
         if: always()
         shell: bash
         run: |
-          report="$(find tools -maxdepth 2 -type f -path 'tools/rapor_*/rapor.txt' -print -quit)"
+          set -euo pipefail
+          mkdir -p guvenli
+          report="$(find tools -maxdepth 2 -type f -path 'tools/rapor_*/rapor.txt' -print -quit || true)"
           if [ -z "$report" ]; then
-            echo "Rapor bulunamadı; tanılama çalışmamış olabilir." > guvenli/rapor.txt
+            echo "Rapor bulunamadı; tanılama çalışmamış veya rapor üretmemiş olabilir." > guvenli/rapor.txt
             echo "Tanılama raporu bulunamadı." >&2
             exit 1
           fi
