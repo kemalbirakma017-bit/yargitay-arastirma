@@ -122,12 +122,6 @@ def test_bedesten_payload_and_result_normalization():
 
 
 
-if __name__ == "__main__":
-    asyncio.run(test_bedesten_requires_verified_templates())
-    test_bedesten_payload_and_result_normalization()
-    test_bedesten_extractor_ignores_unrecognized_arrays()
-    print("BEDSTEN MOCK TESTS PASSED")
-
 
 def test_bedesten_extractor_ignores_unrecognized_arrays():
     from mevzuat_kaynak import _extract_items
@@ -143,4 +137,10 @@ def test_bedesten_extractor_ignores_unrecognized_arrays():
     }
     assert _extract_items(payload) == [{"documentId": "decision-1"}]
 
+
+if __name__ == "__main__":
+    asyncio.run(test_bedesten_requires_verified_templates())
+    test_bedesten_payload_and_result_normalization()
+    test_bedesten_extractor_ignores_unrecognized_arrays()
+    print("BEDSTEN MOCK TESTS PASSED")
 
