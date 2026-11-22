@@ -87,16 +87,16 @@ asyncio.run(main())
 async def test_bedesten_requires_verified_templates():
     import os
     from mevzuat_kaynak import BedestenClient, BedestenConfigurationError
-    old = os.environ.pop("BEDSTEN_SEARCH_PAYLOAD_JSON", None)
+    old = os.environ.pop("BEDSTEN_CONTENT_PAYLOAD_JSON", None)
     try:
         try:
-            await BedestenClient().search("test")
-            raise AssertionError("Yapılandırmasız Bedesten isteği yapılmamalı")
+            await BedestenClient().document("test-id")
+            raise AssertionError("Belge isteği şema olmadan gönderilmemeli")
         except BedestenConfigurationError:
             pass
     finally:
         if old is not None:
-            os.environ["BEDSTEN_SEARCH_PAYLOAD_JSON"] = old
+            os.environ["BEDSTEN_CONTENT_PAYLOAD_JSON"] = old
 
 
 
@@ -120,3 +120,9 @@ def test_bedesten_payload_and_result_normalization():
         if old is not None:
             os.environ["BEDSTEN_SEARCH_PAYLOAD_JSON"] = old
 
+
+
+if __name__ == "__main__":
+    asyncio.run(test_bedesten_requires_verified_templates())
+    test_bedesten_payload_and_result_normalization()
+    print("BEDSTEN MOCK TESTS PASSED")
