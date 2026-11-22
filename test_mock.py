@@ -98,3 +98,25 @@ async def test_bedesten_requires_verified_templates():
         if old is not None:
             os.environ["BEDSTEN_SEARCH_PAYLOAD_JSON"] = old
 
+
+
+# Bedesten payload ve sonuç normalizasyonu: dış ağa çıkmadan test edilir.
+def test_bedesten_payload_and_result_normalization():
+    import os
+    from mevzuat_kaynak import _DEFAULT_SEARCH_TEMPLATE, _extract_items, _extract_total, _load_template
+    old = os.environ.pop("BEDSTEN_SEARCH_PAYLOAD_JSON", None)
+    try:
+        body = _load_template(
+            "BEDSTEN_SEARCH_PAYLOAD_JSON", "${query}", ' "içtihat" ',
+            default=_DEFAULT_SEARCH_TEMPLATE,
+        )
+        assert body["data"]["phrase"] == ' "içtihat" '
+        assert body["data"]["itemTypeList"] == ["YARGITAYKARARI"]
+        payload = {"data": {"total": 17, "emsalKararList": [{"documentId": "abc"}]}}
+        items = _extract_items(payload)
+        assert len(items) == 1 and items[0]["documentId"] == "abc"
+        assert _extract_total(payload, items) == 17
+    finally:
+        if old is not None:
+            os.environ["BEDSTEN_SEARCH_PAYLOAD_JSON"] = old
+
