@@ -76,11 +76,12 @@ kullanıcının sorumluluğundadır.
   ayrı kaynak başlıkları altında döndürür.
 - `karar_metni`: `kaynak="yargitay"` veya `kaynak="bedesten"` ile metin
   isteme yönlendirmesi yapar.
-- Bedesten uç noktalarının istek gövdeleri henüz resmî/dokümante biçimde
-  doğrulanmadığından kod varsayımsal JSON üretmez. Tarayıcı Network/HAR
-  kaydından çerez ve yetkilendirme sırları çıkarılarak doğrulanan gövdeler
-  `BEDSTEN_SEARCH_PAYLOAD_JSON` ve `BEDSTEN_CONTENT_PAYLOAD_JSON`
-  ortam değişkenlerine yerleştirilmelidir. Her iki JSON şablonunda sırasıyla
-  `${query}` ve `${document_id}` yer tutucuları bulunmalıdır.
+- Bedesten arama gövdesi, kamuya açık bir istemci uygulamasında görülen
+  şemayla varsayılan olarak hazırlanır; bu resmî API dokümantasyonu veya
+  canlı doğrulama değildir. Gerekirse `BEDSTEN_SEARCH_PAYLOAD_JSON` ile
+  değiştirilebilir ve içinde `${query}` yer tutucusu bulunmalıdır.
+  Belge içeriği uç noktasının gövdesi doğrulanmadığından
+  `BEDSTEN_CONTENT_PAYLOAD_JSON` ortam değişkeni zorunludur; JSON şablonunda
+  `${document_id}` yer tutucusu bulunmalıdır.
 - Bu nedenle yalnızca mock testlerinin geçmesi Bedesten'den canlı karar
   alınabildiği anlamına gelmez. Canlı doğrulama ayrı yapılmalıdır.
