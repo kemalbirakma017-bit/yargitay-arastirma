@@ -76,20 +76,32 @@ def _load_template(env_name: str, placeholder: str, value: str,
 
 
 def _extract_items(payload: Any) -> list[dict[str, Any]]:
-    candidates = [payload]
-    if isinstance(payload, dict):
-        candidates.extend(payload.get(k) for k in ("data", "result", "results", "content"))
-    for candidate in candidates:
-        if isinstance(candidate, list):
-            return [x for x in candidate if isinstance(x, dict)]
-        if isinstance(candidate, dict):
-            for key in (
-                "emsalKararList", "documents", "items", "records",
-                "content", "data", "results",
-            ):
-                value = candidate.get(key)
-                if isinstance(value, list):
-                    return [x for x in value if isinstance(x, dict)]
+    """Yalnızca bilinen karar koleksiyonu alanlarını, sabit öncelikle okur.
+
+    Genel amaçlı 'content', 'data' veya rastgele ilk listeyi sonuç saymak,
+    yanıtın başka bir bölümünü karar listesi gibi göstermeye yol açabilir.
+    Gerçek Bedesten yanıtı görülene kadar belirsiz yapılar boş sonuç döndürür.
+    """
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+
+    if not isinstance(payload, dict):
+        return []
+
+    collection_keys = ("emsalKararList", "documents", "items", "records", "results")
+
+    # Bazı cevaplarda koleksiyon kökte, bazılarında data/result nesnesindedir.
+    containers = [payload]
+    for wrapper in ("data", "result", "results"):
+        nested = payload.get(wrapper)
+        if isinstance(nested, dict):
+            containers.append(nested)
+
+    for container in containers:
+        for key in collection_keys:
+            value = container.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
     return []
 
 
