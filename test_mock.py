@@ -84,16 +84,16 @@ asyncio.run(main())
 
 
 # Bedesten adaptörünün şema yokken tahmini istek göndermediğini doğrula.
-async def test_bedesten_requires_verified_templates():
+async def test_bedesten_default_content_template():
     import os
-    from mevzuat_kaynak import BedestenClient, BedestenConfigurationError
+    from mevzuat_kaynak import _DEFAULT_CONTENT_TEMPLATE, _load_template
     old = os.environ.pop("BEDSTEN_CONTENT_PAYLOAD_JSON", None)
     try:
-        try:
-            await BedestenClient().document("test-id")
-            raise AssertionError("Belge isteği şema olmadan gönderilmemeli")
-        except BedestenConfigurationError:
-            pass
+        body = _load_template(
+            "BEDSTEN_CONTENT_PAYLOAD_JSON", "${document_id}", "test-id",
+            default=_DEFAULT_CONTENT_TEMPLATE,
+        )
+        assert body == {"data": {"documentId": "test-id"}}
     finally:
         if old is not None:
             os.environ["BEDSTEN_CONTENT_PAYLOAD_JSON"] = old
