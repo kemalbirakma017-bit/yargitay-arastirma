@@ -1,15 +1,9 @@
-"""Bedesten/UYAP içtihat kaynağı için yapılandırılabilir HTTP adaptörü.
+"""Bedesten (Adalet Bakanlığı) emsal karar arama adaptörü.
 
-ÖNEMLİ: Bedesten'in arama ve belge uç noktalarının istek gövdeleri
-resmî/dokümante bir API şeması olarak doğrulanmamıştır. Bu nedenle
-istek gövdeleri tahmin edilmez; HAR/Network kaydından doğrulanan JSON
-şablonları ortam değişkenleriyle verilmelidir.
-
-Gerekli:
-  BEDSTEN_SEARCH_PAYLOAD_JSON='{"...":"${query}"}'
-  BEDSTEN_CONTENT_PAYLOAD_JSON='{"...":"${document_id}"}'
-
-Şablonlarda ${query} ve ${document_id} yer tutucuları kullanılır.
+Arama payload şeması, kamuya açık istemci uygulamalarında görülen
+Bedesten sözleşmesine dayanır; resmî API dokümantasyonu değildir.
+İstek yanıtı canlı ortamda doğrulanmadan sonuçlar hukuki kaynak olarak
+kabul edilmemelidir. Belge içeriği isteği ortam değişkeniyle verilir.
 """
 from __future__ import annotations
 
@@ -25,23 +19,52 @@ SEARCH_PATH = os.getenv("BEDSTEN_SEARCH_PATH", "/emsal-karar/searchDocuments")
 CONTENT_PATH = os.getenv("BEDSTEN_CONTENT_PATH", "/emsal-karar/getDocumentContent")
 TIMEOUT = float(os.getenv("BEDSTEN_TIMEOUT", "30"))
 
+# Kamuya açık istemci örneklerinde görülen arama gövdesi. Bu, Adalet
+# Bakanlığınca yayımlanmış resmî bir API sözleşmesi değildir.
+_DEFAULT_SEARCH_TEMPLATE = {
+    "data": {
+        "pageSize": 20,
+        "pageNumber": 1,
+        "itemTypeList": ["YARGITAYKARARI"],
+        "phrase": "${query}",
+        "sortFields": ["KARAR_TARIHI"],
+        "sortDirection": "desc",
+    },
+    "applicationName": "UyapMevzuat",
+    "paging": True,
+}
+
 
 class BedestenConfigurationError(RuntimeError):
     pass
 
 
-def _load_template(env_name: str, placeholder: str, value: str) -> dict[str, Any]:
+def _replace_placeholder(value: Any, placeholder: str, replacement: str) -> Any:
+    """JSON nesnesi içinde yer tutucuyu güvenli biçimde değiştirir."""
+    if isinstance(value, dict):
+        return {k: _replace_placeholder(v, placeholder, replacement) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_replace_placeholder(v, placeholder, replacement) for v in value]
+    if isinstance(value, str):
+        return value.replace(placeholder, replacement)
+    return value
+
+
+def _load_template(env_name: str, placeholder: str, value: str,
+                   default: dict[str, Any] | None = None) -> dict[str, Any]:
     raw = os.getenv(env_name, "").strip()
-    if not raw:
+    if raw:
+        try:
+            template = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise BedestenConfigurationError(f"{env_name} geçerli JSON değil: {exc}") from exc
+    elif default is not None:
+        template = default
+    else:
         raise BedestenConfigurationError(
-            f"{env_name} ayarlanmamış. Bedesten tarayıcı Network/HAR kaydından "
-            "doğrulanmış JSON istek gövdesi yapılandırılmalıdır; varsayımsal "
-            "parametre gönderilmeyecektir."
+            f"{env_name} ayarlanmamış. Belge içeriği isteğinin JSON gövdesi "
+            "tarayıcı Network/HAR kaydından doğrulanarak tanımlanmalıdır."
         )
-    try:
-        template = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise BedestenConfigurationError(f"{env_name} geçerli JSON değil: {exc}") from exc
     if not isinstance(template, dict):
         raise BedestenConfigurationError(f"{env_name} bir JSON nesnesi olmalıdır.")
     serialized = json.dumps(template, ensure_ascii=False)
@@ -49,11 +72,10 @@ def _load_template(env_name: str, placeholder: str, value: str) -> dict[str, Any
         raise BedestenConfigurationError(
             f"{env_name} içinde {placeholder} yer tutucusu bulunmalıdır."
         )
-    return json.loads(serialized.replace(placeholder, value))
+    return _replace_placeholder(template, placeholder, value)
 
 
 def _extract_items(payload: Any) -> list[dict[str, Any]]:
-    """Bedesten yanıtında yaygın koleksiyon sarmalayıcılarını bulur."""
     candidates = [payload]
     if isinstance(payload, dict):
         candidates.extend(payload.get(k) for k in ("data", "result", "results", "content"))
@@ -61,11 +83,25 @@ def _extract_items(payload: Any) -> list[dict[str, Any]]:
         if isinstance(candidate, list):
             return [x for x in candidate if isinstance(x, dict)]
         if isinstance(candidate, dict):
-            for key in ("documents", "items", "records", "content", "data", "results"):
+            for key in (
+                "emsalKararList", "documents", "items", "records",
+                "content", "data", "results",
+            ):
                 value = candidate.get(key)
                 if isinstance(value, list):
                     return [x for x in value if isinstance(x, dict)]
     return []
+
+
+def _extract_total(payload: Any, items: list[dict[str, Any]]) -> int:
+    if isinstance(payload, dict):
+        data = payload.get("data")
+        if isinstance(data, dict):
+            for key in ("total", "totalElements", "recordsTotal", "totalCount"):
+                value = data.get(key)
+                if isinstance(value, int):
+                    return value
+    return len(items)
 
 
 class BedestenClient:
@@ -75,7 +111,10 @@ class BedestenClient:
         self.content_path = CONTENT_PATH
 
     async def search(self, query: str) -> dict[str, Any]:
-        body = _load_template("BEDSTEN_SEARCH_PAYLOAD_JSON", "${query}", query)
+        body = _load_template(
+            "BEDSTEN_SEARCH_PAYLOAD_JSON", "${query}", query,
+            default=_DEFAULT_SEARCH_TEMPLATE,
+        )
         url = urljoin(self.base_url + "/", self.search_path.lstrip("/"))
         async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
             response = await client.post(url, json=body, headers={
@@ -90,11 +129,13 @@ class BedestenClient:
                 raise RuntimeError(
                     f"Bedesten arama yanıtı JSON değil (HTTP {response.status_code})."
                 ) from exc
+        items = _extract_items(payload)
         return {
             "kaynak": "Bedesten",
             "sorgu": query,
-            "sonuc_sayisi": len(_extract_items(payload)),
-            "sonuclar": _extract_items(payload),
+            "toplam_sonuc": _extract_total(payload, items),
+            "sonuc_sayisi": len(items),
+            "sonuclar": items,
             "ham_yanit": payload,
             "kaynak_url": url,
         }
