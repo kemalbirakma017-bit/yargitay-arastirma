@@ -306,4 +306,3 @@ class BedestenClient:
             "metin": text,
             "kaynak_url": f"{PUBLIC_DECISION_URL}/{quote(document_id, safe='')}",
         }
-}
