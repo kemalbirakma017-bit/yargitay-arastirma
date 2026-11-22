@@ -509,8 +509,8 @@ async def tum_kaynaklarda_karar_ara(aranan_kelime: str, daire: str = "",
 async def karar_metni(kaynak: str, karar_id: str) -> dict:
     """Kaynak adı ve karar/belge kimliğiyle karar metnini getirir.
 
-    kaynak: 'yargitay' veya 'bedesten'. Bedesten için doğrulanmış
-    BEDSTEN_CONTENT_PAYLOAD_JSON şablonu gerekir.
+    kaynak: 'yargitay' veya 'bedesten'. Bedesten belge kimliği, arama
+    sonucundaki documentId değeridir; tam metin varsayılan Bedesten şemasıyla alınır.
     """
     kaynak = kaynak.strip().lower()
     karar_id = str(karar_id).strip()
