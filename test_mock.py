@@ -139,7 +139,7 @@ def test_bedesten_extractor_ignores_unrecognized_arrays():
 
 
 if __name__ == "__main__":
-    asyncio.run(test_bedesten_requires_verified_templates())
+    asyncio.run(test_bedesten_default_content_template())
     test_bedesten_payload_and_result_normalization()
     test_bedesten_extractor_ignores_unrecognized_arrays()
     print("BEDSTEN MOCK TESTS PASSED")
