@@ -81,3 +81,20 @@ async def main():
     print("ALL TESTS PASSED")
 
 asyncio.run(main())
+
+
+# Bedesten adaptörünün şema yokken tahmini istek göndermediğini doğrula.
+async def test_bedesten_requires_verified_templates():
+    import os
+    from mevzuat_kaynak import BedestenClient, BedestenConfigurationError
+    old = os.environ.pop("BEDSTEN_SEARCH_PAYLOAD_JSON", None)
+    try:
+        try:
+            await BedestenClient().search("test")
+            raise AssertionError("Yapılandırmasız Bedesten isteği yapılmamalı")
+        except BedestenConfigurationError:
+            pass
+    finally:
+        if old is not None:
+            os.environ["BEDSTEN_SEARCH_PAYLOAD_JSON"] = old
+
