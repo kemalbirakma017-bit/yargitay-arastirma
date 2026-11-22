@@ -1,0 +1,77 @@
+name: Bedesten canlı tanılama (manuel)
+
+# Yalnızca elle başlatılır. Girdi EVET değilse canlı istek gönderilmez.
+# En fazla iki POST: arama ve ilk bulunan kararın içeriği.
+# Cookie/Authorization gönderilmez; yönlendirme izlenmez; tekrar deneme yapılmaz.
+# Artifact yalnızca bu çalıştırmada üretilen raporu içerir.
+
+on:
+  workflow_dispatch:
+    inputs:
+      onay:
+        description: "Canlı Bedesten isteğini başlatmayı onaylıyorum; EVET yazın"
+        required: true
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  canli-tanilama:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Onay kapısı
+        shell: bash
+        env:
+          ONAY: ${{ inputs.onay }}
+        run: |
+          if [ "$ONAY" != "EVET" ]; then
+            echo "Onay verilmedi. Canlı istek gönderilmedi."
+            exit 1
+          fi
+
+      - name: Depoyu al
+        uses: actions/checkout@v4
+
+      - name: Python kurulumu
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Önceki raporları temizle
+        shell: bash
+        run: |
+          rm -rf tools/rapor_* guvenli
+          mkdir -p guvenli
+
+      - name: Canlı tanılama (en fazla 2 istek)
+        id: tanilama
+        shell: bash
+        run: python tools/bedesten_tanilama.py --canli
+
+      - name: Başarı ölçütlerini doğrula
+        if: always()
+        shell: bash
+        run: |
+          report="$(find tools -maxdepth 2 -type f -path 'tools/rapor_*/rapor.txt' -print -quit)"
+          if [ -z "$report" ]; then
+            echo "Rapor bulunamadı; tanılama çalışmamış olabilir." > guvenli/rapor.txt
+            echo "Tanılama raporu bulunamadı." >&2
+            exit 1
+          fi
+          cp "$report" guvenli/rapor.txt
+          grep -Fq "MOD: CANLI" guvenli/rapor.txt
+          grep -Fq "Karar listesi: BULUNDU" guvenli/rapor.txt
+          grep -Eq "Tam metin BASE64 çözüldü: [1-9][0-9]* karakter" guvenli/rapor.txt
+          grep -Fq "SONUÇ: BAŞARILI" guvenli/rapor.txt
+
+      - name: Güvenli raporu yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bedesten-rapor-${{ github.run_id }}
+          path: guvenli/rapor.txt
+          if-no-files-found: warn
+          retention-days: 7
