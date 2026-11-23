@@ -5,10 +5,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py .
-COPY webapp.py .
+COPY bedesten_server.py .
 
 ENV PORT=8000
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn webapp:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["python", "bedesten_server.py"]
