@@ -19,16 +19,41 @@ async def exercise_mcp() -> dict:
         tools = {tool.name for tool in await client.list_tools()}
         assert {"yargitay_karar_ara", "yargitay_karar_metni"} <= tools, tools
 
-        search = await client.call_tool(
+        for division in (
+            "Hukuk Genel Kurulu",
+            "Ceza Genel Kurulu",
+            "8. Hukuk Dairesi",
+        ):
+            result = await client.call_tool(
+                "yargitay_karar_ara",
+                {"daire": division, "sayfa_boyutu": 3},
+            )
+            data = result.data
+            assert isinstance(data, dict), type(data).__name__
+            decisions = data.get("kararlar") or []
+            assert decisions, (division, data.get("toplam_sonuc"))
+            assert all(item.get("daire") == division for item in decisions), decisions
+            print("DIVISION_FILTER_OK", division, len(decisions), data.get("toplam_sonuc"))
+
+        by_esas = await client.call_tool(
             "yargitay_karar_ara",
             {"daire": "Hukuk Genel Kurulu", "esas_yil": "2025",
              "esas_ilk_sira_no": "710", "sayfa_boyutu": 5},
         )
-        data = search.data
-        assert isinstance(data, dict), type(data).__name__
-        decisions = data.get("kararlar") or []
-        assert any(str(item.get("id")) == DOC_ID for item in decisions), data
-        print("LIVE_SEARCH_OK", data.get("toplam_sonuc"), DOC_ID)
+        esas_data = by_esas.data
+        assert isinstance(esas_data, dict), type(esas_data).__name__
+        assert any(str(item.get("id")) == DOC_ID for item in esas_data.get("kararlar", [])), esas_data
+        print("ESAS_FILTER_OK", esas_data.get("toplam_sonuc"), DOC_ID)
+
+        by_karar = await client.call_tool(
+            "yargitay_karar_ara",
+            {"daire": "Hukuk Genel Kurulu", "karar_yil": "2026",
+             "karar_ilk_sira_no": "626", "sayfa_boyutu": 5},
+        )
+        karar_data = by_karar.data
+        assert isinstance(karar_data, dict), type(karar_data).__name__
+        assert any(str(item.get("id")) == DOC_ID for item in karar_data.get("kararlar", [])), karar_data
+        print("KARAR_FILTER_OK", karar_data.get("toplam_sonuc"), DOC_ID)
 
         warning = await client.call_tool(
             "yargitay_karar_ara",
