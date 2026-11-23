@@ -9,7 +9,7 @@ kararsız uyguluyor, toplam sayıyı bazen null döndürüyor. Bedesten daire
 (birimAdi) ve tarih filtrelerini sunucu tarafında uygular ve toplamı
 "total" alanında verir.
 
-Doğrulanmış API davranışı:
+Kamuya açık istemci kaynak kodundan türetilen API beklentisi (canlı doğrulanmadı):
   POST /emsal-karar/searchDocuments
       {"data": {...}, "applicationName": "UyapMevzuat", "paging": true}
       yanıt: {"data": {"emsalKararList": [...], "total": N, "start": S}}
@@ -38,7 +38,7 @@ SOURCE_URL = "https://mevzuat.adalet.gov.tr/ictihat/{doc_id}"
 APPLICATION_NAME = "UyapMevzuat"
 ITEM_TYPE_YARGITAY = "YARGITAYKARARI"
 
-MIN_INTERVAL = float(os.environ.get("YARGITAY_MIN_INTERVAL", "1.0"))
+MIN_INTERVAL = float(os.environ.get("YARGITAY_MIN_INTERVAL", "3.0"))
 TIMEOUT = 30.0
 MAX_RETRIES = 2
 

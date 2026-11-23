@@ -71,6 +71,9 @@ async def main() -> None:
     assert "YARGITAY" in text and "Karar metni" in text
     content_request = json.loads(captured[-1][2])
     assert content_request["data"]["documentId"] == "1024709700"
+    decision = await server.yargitay_karar_metni("1024709700")
+    assert decision["id"] == "1024709700"
+    assert decision["metin"] == text and decision["kaynak"].endswith("/1024709700")
 
     # Existing public tool names and argument names remain available.
     params = inspect.signature(server.yargitay_karar_ara).parameters
