@@ -415,7 +415,8 @@ async def yargitay_toplu_arastirma(
     }
     if hatalar:
         out["hatalar"] = hatalar
-    if arama["toplam_sonuc"] > sonuc_sayisi:
+    toplam = arama["toplam_sonuc"]
+    if isinstance(toplam, int) and not isinstance(toplam, bool) and toplam > sonuc_sayisi:
         out["not"] = (
             f"Toplam {arama['toplam_sonuc']} sonuçtan ilk {sonuc_sayisi} künye "
             "listelendi. Daraltmak için daire/tarih filtresi veya daha spesifik "
