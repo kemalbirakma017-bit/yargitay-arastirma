@@ -8,6 +8,7 @@ import asyncio
 import base64
 import os
 import re
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -161,6 +162,10 @@ def _date_value(value: str, end: bool = False) -> str | None:
     value = str(value).strip()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
         raise ValueError("Tarihler YYYY-AA-GG biçiminde olmalıdır.")
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("Geçersiz takvim tarihi. Tarih YYYY-AA-GG biçiminde ve gerçek bir tarih olmalıdır.") from exc
     return value + ("T23:59:59.999Z" if end else "T00:00:00.000Z")
 
 
