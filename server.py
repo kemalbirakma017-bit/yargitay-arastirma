@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import logging
 import os
 import re
 import time
@@ -105,6 +106,9 @@ class _Pacer:
         self._pause_until = max(self._pause_until, time.monotonic() + seconds)
 
 
+log = logging.getLogger("yargitay")
+logging.basicConfig(level=os.environ.get("YARGITAY_LOG_LEVEL", "INFO"))
+
 _pacer = _Pacer(MIN_INTERVAL)
 _client: Optional[httpx.AsyncClient] = None
 _client_lock = asyncio.Lock()
@@ -135,7 +139,22 @@ async def _post(path: str, body: dict[str, Any]) -> dict[str, Any]:
     client = await _get_client()
     for attempt in range(MAX_RETRIES + 1):
         await _pacer.wait()
-        resp = await client.post(path, json=body)
+        log.info("bedesten POST start path=%s attempt=%d", path, attempt + 1)
+        t0 = time.monotonic()
+        try:
+            resp = await client.post(path, json=body)
+        except httpx.HTTPError as exc:
+            log.error(
+                "bedesten POST error path=%s after=%.1fs err=%s",
+                path, time.monotonic() - t0, type(exc).__name__,
+            )
+            raise UpstreamError(
+                f"Bedesten bağlantı hatası: {type(exc).__name__}"
+            ) from exc
+        log.info(
+            "bedesten POST done path=%s status=%d after=%.1fs",
+            path, resp.status_code, time.monotonic() - t0,
+        )
         if resp.status_code == 429:
             retry_after = _retry_after_seconds(resp.headers.get("retry-after"))
             _pacer.pause(retry_after)
@@ -468,6 +487,7 @@ async def yargitay_karar_ara(
         karar_ilk_sira_no: Karar sıra no (tek numara). karar_yil ile birlikte.
         karar_son_sira_no: Kullanılmaz; geriye dönük uyumluluk için kabul edilir.
     """
+    log.info("tool yargitay_karar_ara start")
     result = await _do_search(
         aranan_kelime=aranan_kelime, daire=daire,
         baslangic_tarihi=baslangic_tarihi, bitis_tarihi=bitis_tarihi,
@@ -486,6 +506,10 @@ async def yargitay_karar_ara(
             + " Bedesten API'sinde desteklenmediği için uygulanmadı; sonuçlar "
             "istenen sıra aralığından daha geniş olabilir."
         )
+    log.info(
+        "tool yargitay_karar_ara done result_count=%d total=%s",
+        len(result.get("kararlar", [])), result.get("toplam_sonuc"),
+    )
     return result
 
 
