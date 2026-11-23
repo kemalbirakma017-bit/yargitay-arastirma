@@ -9,7 +9,7 @@ kararsız uyguluyor, toplam sayıyı bazen null döndürüyor. Bedesten daire
 (birimAdi) ve tarih filtrelerini sunucu tarafında uygular ve toplamı
 "total" alanında verir.
 
-Kamuya açık istemci kaynak kodundan türetilen API beklentisi (canlı doğrulanmadı):
+API beklentisi ve FastMCP HTTP uçtan uca davranışı 23.11.2026 tarihinde GitHub Actions canlı Bedesten kontrolünde doğrulandı:
   POST /emsal-karar/searchDocuments
       {"data": {...}, "applicationName": "UyapMevzuat", "paging": true}
       yanıt: {"data": {"emsalKararList": [...], "total": N, "start": S}}
