@@ -85,6 +85,14 @@ async def main() -> None:
     assert callable(server.yargitay_karar_ara)
     assert callable(server.yargitay_karar_metni)
 
+    range_result = await server.yargitay_karar_ara(
+        esas_yil="2025", esas_ilk_sira_no="710", esas_son_sira_no="720",
+    )
+    assert "uyari" in range_result
+    assert "esas_son_sira_no" in range_result["uyari"]
+    sent_range = json.loads(captured[-1][2])["data"]
+    assert sent_range["esasNoYil"] == "2025" and sent_range["esasNoSira"] == "710"
+
     # Old ALL and kurul spelling are accepted; end-of-range args stay accepted.
     await server._do_search(daire="ALL")
     assert "birimAdi" not in json.loads(captured[-1][2])["data"]

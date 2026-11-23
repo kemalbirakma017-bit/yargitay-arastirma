@@ -468,13 +468,25 @@ async def yargitay_karar_ara(
         karar_ilk_sira_no: Karar sıra no (tek numara). karar_yil ile birlikte.
         karar_son_sira_no: Kullanılmaz; geriye dönük uyumluluk için kabul edilir.
     """
-    return await _do_search(
+    result = await _do_search(
         aranan_kelime=aranan_kelime, daire=daire,
         baslangic_tarihi=baslangic_tarihi, bitis_tarihi=bitis_tarihi,
         sayfa=sayfa, sayfa_boyutu=sayfa_boyutu,
         esas_yil=esas_yil, esas_sira_no=esas_ilk_sira_no,
         karar_yil=karar_yil, karar_sira_no=karar_ilk_sira_no,
     )
+    ignored_ranges = []
+    if esas_son_sira_no:
+        ignored_ranges.append("esas_son_sira_no")
+    if karar_son_sira_no:
+        ignored_ranges.append("karar_son_sira_no")
+    if ignored_ranges:
+        result["uyari"] = (
+            ", ".join(ignored_ranges)
+            + " Bedesten API'sinde desteklenmediği için uygulanmadı; sonuçlar "
+            "istenen sıra aralığından daha geniş olabilir."
+        )
+    return result
 
 
 @mcp.tool
