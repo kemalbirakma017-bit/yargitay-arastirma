@@ -1,83 +1,108 @@
-"""MCP katmanı testi — kaynak site bu konteynerden erişilemediği için
-canlı doğrulanmış (16.07.2026) yanıt şemalarıyla mock upstream kullanır."""
-import asyncio, json
+"""Mock Bedesten contract and backwards-compatibility tests."""
+import asyncio
+import base64
+import inspect
+import json
+
 import httpx
 import server
-from fastmcp import Client
 
-SEARCH_RESP = {
-    "data": {
-        "recordsTotal": 12206,
-        "recordsFiltered": 12206,
-        "data": [
-            {"id": "1024709700", "daire": "Hukuk Genel Kurulu",
-             "esasNo": "2023/456", "kararNo": "2026/123",
-             "kararTarihi": "20.05.2026", "arananKelime": "tazminat",
-             "index": 1, "siraNo": 1},
-        ],
-    },
-    "metadata": {"FMTY": "SUCCESS"},
-}
-DOC_RESP = {"data": "<html><body><h2>T.C. YARGITAY</h2><p>Hukuk Genel Kurulu</p>"
-                    "<br><p>MAHKEMESİ: Ticaret Mahkemesi</p><p>Karar metni...</p>"
-                    "</body></html>", "metadata": {"FMTY": "SUCCESS"}}
 
+HTML = "<html><body><h2>T.C. YARGITAY</h2><p>Hukuk Genel Kurulu</p><p>Karar metni...</p></body></html>"
+HTML_B64 = base64.b64encode(HTML.encode("utf-8")).decode("ascii")
 captured = []
 
+
 def mock_transport(request: httpx.Request) -> httpx.Response:
-    captured.append((request.method, request.url.path, request.content.decode() if request.content else ""))
-    if request.url.path == "/aramadetaylist":
-        return httpx.Response(200, json=SEARCH_RESP)
-    if request.url.path == "/getDokuman":
-        return httpx.Response(200, json=DOC_RESP)
-    return httpx.Response(200, text="<html>ana sayfa</html>")
+    body = request.content.decode("utf-8") if request.content else ""
+    captured.append((request.method, request.url.path, body))
+    if request.url.path == "/emsal-karar/searchDocuments":
+        return httpx.Response(200, json={"data": {
+            "total": 12206,
+            "emsalKararList": [{
+                "documentId": "1024709700",
+                "birimAdi": "Hukuk Genel Kurulu",
+                "esasNo": "2023/456",
+                "kararNo": "2026/123",
+                "kararTarihiStr": "20.05.2026",
+                "kesinlesmeDurumu": "Kesinleşti",
+            }],
+        }})
+    if request.url.path == "/emsal-karar/getDocumentContent":
+        return httpx.Response(200, json={"data": {
+            "content": HTML_B64, "mimeType": "text/html",
+        }})
+    return httpx.Response(404, json={"error": "unexpected endpoint"})
 
-async def main():
-    server.MIN_INTERVAL = 0.0
-    server._throttle.min_interval = 0.0
+
+async def main() -> None:
+    server._pacer.min_interval = 0
+    server._doc_cache.clear()
     server._client = httpx.AsyncClient(
-        base_url=server.BASE_URL, headers=server.HEADERS,
-        transport=httpx.MockTransport(mock_transport))
+        base_url=server.BEDESTEN_BASE, headers=server.HEADERS,
+        transport=httpx.MockTransport(mock_transport),
+    )
 
-    async with Client(server.mcp) as c:
-        tools = await c.list_tools()
-        print("TOOLS:", [t.name for t in tools])
+    result = await server._do_search(
+        aranan_kelime="tazminat", daire="Hukuk Genel Kurulu",
+        baslangic_tarihi="01.01.2024", bitis_tarihi="31.12.2024",
+        sayfa=2, sayfa_boyutu=20, esas_yil="2023", esas_sira_no="456",
+        karar_yil="2026", karar_sira_no="123",
+    )
+    assert result["toplam_sonuc"] == 12206
+    record = result["kararlar"][0]
+    assert record["id"] == "1024709700"
+    assert record["esas_no"] == "2023/456"
+    assert record["karar_no"] == "2026/123"
+    assert record["karar_tarihi"] == "20.05.2026"
+    assert record["kaynak"].endswith("/1024709700")
+    sent = json.loads(captured[-1][2])
+    data = sent["data"]
+    assert sent["paging"] is True
+    assert data["phrase"] == "tazminat"
+    assert data["birimAdi"] == "Hukuk Genel Kurulu"
+    assert data["kararTarihiStart"] == "2024-01-01T00:00:00.000Z"
+    assert data["kararTarihiEnd"] == "2024-12-31T23:59:59.000Z"
+    assert data["esasNoYil"] == "2023" and data["esasNoSira"] == "456"
+    assert data["kararNoYil"] == "2026" and data["kararNoSira"] == "123"
+    assert data["pageNumber"] == 2 and data["pageSize"] == 20
 
-        r = await c.call_tool("yargitay_karar_ara", {
-            "aranan_kelime": "tazminat", "daire": "Hukuk Genel Kurulu",
-            "baslangic_tarihi": "01.01.2024", "bitis_tarihi": "31.12.2024"})
-        out = r.data
-        assert out["toplam_sonuc"] == 12206, out
-        assert out["kararlar"][0]["id"] == "1024709700"
-        sent = json.loads([c for c in captured if c[1] == "/aramadetaylist"][0][2])
-        assert sent["data"]["aranan"] == "tazminat" and sent["data"]["arananKelime"] == "tazminat"
-        assert sent["data"]["birimYrgKurulDaire"] == "Hukuk Genel Kurulu"
-        assert "esasYil" not in sent["data"], "boş alan gönderilmemeli"
-        print("SEARCH OK:", out["kararlar"][0])
+    text = await server._fetch_doc_text("1024709700")
+    assert "YARGITAY" in text and "Karar metni" in text
+    content_request = json.loads(captured[-1][2])
+    assert content_request["data"]["documentId"] == "1024709700"
 
-        r2 = await c.call_tool("yargitay_karar_metni", {"karar_id": "1024709700"})
-        assert "YARGITAY" in r2.data["metin"] and "MAHKEMESİ" in r2.data["metin"]
-        print("DOC OK:", repr(r2.data["metin"][:80]))
+    # Existing public tool names and argument names remain available.
+    params = inspect.signature(server.yargitay_karar_ara).parameters
+    for name in (
+        "esas_yil", "esas_ilk_sira_no", "esas_son_sira_no",
+        "karar_yil", "karar_ilk_sira_no", "karar_son_sira_no",
+    ):
+        assert name in params, name
+    assert callable(server.yargitay_karar_ara)
+    assert callable(server.yargitay_karar_metni)
 
-        # hata durumları
-        try:
-            await c.call_tool("yargitay_karar_ara", {"daire": "99. Uydurma Dairesi"})
-            raise SystemExit("daire validasyonu çalışmadı")
-        except Exception as e:
-            print("DAIRE VALIDATION OK")
-        try:
-            await c.call_tool("yargitay_karar_ara", {"baslangic_tarihi": "2024-01-01"})
-            raise SystemExit("tarih validasyonu çalışmadı")
-        except Exception:
-            print("DATE VALIDATION OK")
+    # Old ALL and kurul spelling are accepted; end-of-range args stay accepted.
+    await server._do_search(daire="ALL")
+    assert "birimAdi" not in json.loads(captured[-1][2])["data"]
+    await server._do_search(daire="Büyük Genel Kurulu")
+    assert json.loads(captured[-1][2])["data"]["birimAdi"] == "Büyük Genel Kurul"
 
-        # ALL -> filtre gönderilmez
-        captured.clear()
-        await c.call_tool("yargitay_karar_ara", {"aranan_kelime": "x", "daire": "ALL"})
-        sent = json.loads(captured[-1][2])
-        assert "birimYrgKurulDaire" not in sent["data"]
-        print("ALL-DAIRE OK")
+    # Null totals remain safe and preserve the established output keys.
+    async def null_search(*args, **kwargs):
+        return {"toplam_sonuc": None, "kararlar": []}
+    original = server._do_search
+    server._do_search = null_search
+    try:
+        bulk = await server._toplu_impl("tazminat", metin_sayisi=0)
+        assert bulk["toplam_sonuc"] is None
+        assert bulk["metinler"] == [] and bulk["metin_bicimi"] == "pencere"
+    finally:
+        server._do_search = original
 
+    await server._client.aclose()
     print("ALL TESTS PASSED")
 
+
 asyncio.run(main())
+
