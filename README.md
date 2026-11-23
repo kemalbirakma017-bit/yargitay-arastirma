@@ -1,70 +1,54 @@
-# Yargıtay Karar Arama — MCP Sunucusu
+# Yargıtay Karar Arama — UYAP Bedesten MCP
 
-karararama.yargitay.gov.tr (kamuya açık Yargıtay karar arama platformu) üzerinde
-arama yapan ve karar tam metni getiren, **uzak (HTTP) MCP sunucusu**. Bir kez
-bulutta barındırılır, claude.ai hesabınıza özel bağlayıcı (custom connector)
-olarak eklenir ve **hesabınızı kullandığınız tüm bilgisayarlarda** çalışır.
+Bu depo, Adalet Bakanlığı UYAP Mevzuat ve İçtihat / Bedesten üzerinden Yargıtay kararlarını aramak ve karar metnini almak için FastMCP sunucusu içerir.
+
+## FastMCP sunucusu
+
+- **Entrypoint:** `bedesten_server.py:mcp`
+- **Bağımlılıklar:** `requirements.txt`
+- **Taşıma:** FastMCP Cloud/Gateway tarafından yönetilen uzak MCP (Streamable HTTP)
+- **MCP yolu:** `/mcp`
 
 ## Araçlar
 
 | Araç | İşlev |
 |---|---|
-| `yargitay_karar_ara` | Kelime/ifade, daire, esas–karar no aralığı ve karar tarihi aralığına göre arama. Sayfalama destekli. |
-| `yargitay_karar_metni` | Arama sonucundaki `id` ile kararın tam metnini düz metin olarak getirir. |
-| `yargitay_daire_listesi` | Geçerli daire/kurul adlarını listeler (Hukuk/Ceza Genel Kurulu, 1–23. Hukuk/Ceza Daireleri vb.). |
+| `yargitay_daire_listesi` | HGK, CGK ve hukuk/ceza dairelerini listeler. |
+| `yargitay_karar_ara` | Bedesten'de kelime, daire, esas/karar numarası ve tarih ölçütleriyle arama yapar. |
+| `yargitay_karar_metni` | Arama sonucundaki karar kimliğiyle tam metni getirir. |
+| `yargitay_toplu_arastirma` | Arama yapar ve en fazla iki kararın metnini aynı çağrıda getirir. |
 
-## Önemli teknik notlar (canlı testle doğrulandı — 16.07.2026)
+## Ücretsiz kişisel dağıtım
 
-- Sitenin resmî/dokümante API'si yoktur; sunucu, sitenin kendi arayüzünün
-  kullandığı `POST /aramadetaylist` ve `GET /getDokuman` uç noktalarını kullanır.
-  **Site arayüzü değişirse sunucunun güncellenmesi gerekebilir.**
-- Site hız sınırı uygular (HTTP 429 "Erişim Sınırı Aşıldı"). Sunucu istekler
-  arasına en az 3 sn koyar ve 429'da 20 sn bekleyip bir kez yeniden dener.
-  Buna rağmen sınır aşılırsa kullanıcıya "1-2 dakika bekleyin" mesajı döner.
-- Daire filtresinde `"ALL"` değeri sitede 0 sonuç döndürür; tüm daireler için
-  alan hiç gönderilmez (sunucu bunu otomatik yönetir).
-- Tarih formatı `GG.AA.YYYY`, kesin ifade araması çift tırnakla yapılır:
-  `"elektrik piyasası"`.
+FastMCP Gateway kişisel projeler için ücretsiz plan sunduğunu resmî hızlı başlangıç belgesinde belirtiyor. Dağıtım için:
 
-## Kurulum — Seçenek A: FastMCP Cloud (önerilen, kişisel kullanımda ücretsiz)
+1. GitHub hesabıyla [FastMCP Gateway](https://horizon.prefect.io/) hesabına giriş yapın.
+2. **Create project / New project** bölümünden bu depoyu seçin.
+3. Server entrypoint alanına tam olarak `bedesten_server.py:mcp` yazın.
+4. Build/deploy işlemini başlatın.
+5. Dağıtım tamamlandığında Gateway'in verdiği `https://....fastmcp.app/mcp` adresini kopyalayın.
+6. Bu adresi MCP destekleyen istemcinin uzak sunucu/connector ayarına ekleyin.
 
-1. github.com'da hesap açın (varsa geçin) ve bu klasörü **private repo** olarak
-   yükleyin (`server.py`, `requirements.txt` yeterli).
-2. https://fastmcp.cloud adresine GitHub ile giriş yapın.
-3. "New Server" → repo'yu seçin → Entrypoint: `server.py:mcp` → Deploy.
-4. ~1 dk içinde adres alırsınız: `https://<sunucu-adiniz>.fastmcp.app/mcp`
+FastMCP Gateway, GitHub deposundaki dosyaları alıp sunucuyu kendi yönetilen ortamında çalıştırır. Bu yöntem için Railway veya ücretli bir VPS kullanılmaz.
 
-## Kurulum — Seçenek B: Kendi sunucunuz / Render / Railway (Docker)
-
-```bash
-docker build -t yargitay-mcp .
-docker run -p 8000:8000 yargitay-mcp
-# MCP adresi: http://<host>:8000/mcp  (HTTPS için ters proxy gerekir)
-```
-
-Ortam değişkenleri: `PORT` (varsayılan 8000), `MCP_PATH` (varsayılan `/mcp`),
-`YARGITAY_MIN_INTERVAL` (istekler arası minimum sn, varsayılan 3).
-
-## claude.ai'ye bağlama (tüm cihazlarda çalışması için)
-
-1. claude.ai → **Ayarlar → Bağlayıcılar (Connectors)** → **Özel bağlayıcı ekle**.
-2. Ad: `Yargıtay Karar Arama`, URL: `https://<sunucu-adiniz>.fastmcp.app/mcp`.
-3. Kaydedin; her sohbette bağlayıcıyı etkinleştirerek kullanın.
-
-> Not: Kimlik doğrulaması olmayan bir bağlayıcıda URL'yi bilen herkes sunucuyu
-> kullanabilir. Veriler kamuya açık olduğundan risk düşüktür; yine de URL'yi
-> paylaşmayın. İsterseniz FastMCP Cloud üzerinde OAuth açılabilir.
-
-## Yerel test
+## Yerel çalıştırma
 
 ```bash
 pip install -r requirements.txt
-python test_mock.py        # mock upstream ile MCP katmanı testleri
-MCP_TRANSPORT=stdio python server.py   # stdio modunda (tek makine) çalıştırma
+python bedesten_server.py
 ```
 
-## Hukuki not
+Yerel MCP adresi: `http://127.0.0.1:8000/mcp`
 
-Kararlar Yargıtay'ın kamuya açık platformundan alınır; kişisel veri içerebilen
-karar metinlerinin işlenmesinde KVKK ve platformun kullanım koşullarına uyum
-kullanıcının sorumluluğundadır.
+## Parametreler
+
+- `YARGITAY_MIN_INTERVAL`: Bedesten'e gönderilen istekler arasındaki asgari bekleme süresi (saniye); varsayılan 2.
+- Arama tarihleri `YYYY-AA-GG` biçiminde verilmelidir.
+- Bedesten'in erişim sınırlaması (HTTP 429) uygulaması hâlinde araç hata döndürür; otomatik olarak sınırsız tekrar yapmaz.
+- Daireye göre filtreleme, Bedesten'in sonuç sayfaları üzerinde yerel olarak uygulanır. Çok fazla sonuçta tarama sınırı nedeniyle toplam filtreli sonuç sayısı kesinleşmeyebilir; araç bu durumu ayrıca bildirir.
+
+## Doğrulama ilkesi
+
+Bu sunucu bir arama ve belge getirme aracıdır; hukuki içtihat doğrulamasının yerine geçmez. Karar künyesi, tarihi ve tam metni Bedesten yanıtından alınmalıdır. Tam metin alınamadığında bu açıkça belirtilmeli; eksik metin tam metinmiş gibi sunulmamalıdır. UYAP'ta açılan kararın kendisiyle son kontrol yapılmalıdır.
+
+**Dağıtım notu:** Kaynak kodunun FastMCP Gateway üzerinde başarıyla deploy edilmesi, Bedesten uç noktalarının o andaki erişilebilirliğini tek başına kanıtlamaz. İlk canlı testte HGK/CGK araması ve bir kararın tam metin çağrısı ayrıca doğrulanmalıdır.
