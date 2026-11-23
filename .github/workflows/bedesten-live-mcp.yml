@@ -1,0 +1,30 @@
+name: Bedesten live MCP integration
+
+on:
+  push:
+    branches:
+      - feature/bedesten-v2-compatible
+    paths:
+      - server.py
+      - test_live_mcp.py
+      - requirements.txt
+      - .github/workflows/bedesten-live-mcp.yml
+
+permissions:
+  contents: read
+
+jobs:
+  live-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run PR FastMCP server against live Bedesten
+        run: python test_live_mcp.py
