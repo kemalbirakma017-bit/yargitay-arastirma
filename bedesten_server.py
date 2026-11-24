@@ -191,12 +191,19 @@ def _base_query(args: dict[str, Any]) -> dict[str, Any]:
         )
     if karar_turu != "Yargıtay Kararı" and str(args.get("daire") or "").strip():
         raise ValueError("daire filtresi yalnızca Yargıtay Kararı aramalarında kullanılabilir.")
+    siralama = str(args.get("siralama") or "alaka").strip()
+    if siralama not in {"alaka", "tarih_yeniden_eskiye"}:
+        raise ValueError("siralama 'alaka' veya 'tarih_yeniden_eskiye' olmalıdır.")
+
     base: dict[str, Any] = {
         "phrase": phrase,
         "itemTypeList": [item_type],
-        "sortFields": ["KARAR_TARIHI"],
-        "sortDirection": "desc",
     }
+    # Bedesten'in varsayılan alaka sıralamasını koru; tarih seçilirse
+    # sıralama alanlarını açıkça gönder.
+    if siralama == "tarih_yeniden_eskiye":
+        base["sortFields"] = ["KARAR_TARIHI"]
+        base["sortDirection"] = "desc"
 
     _, unit_label = _unit_filter(str(args.get("daire") or ""))
     if unit_label:
@@ -264,6 +271,7 @@ async def _search(args: dict[str, Any]) -> dict[str, Any]:
     response: dict[str, Any] = {
         "kaynak_sistemi": "Adalet Bakanlığı UYAP Mevzuat ve İçtihat / Bedesten",
         "karar_turu": str(args.get("karar_turu") or "Yargıtay Kararı"),
+        "siralama": str(args.get("siralama") or "alaka"),
         "toplam_sonuc": int(result.get("total") or 0),
         "sayfa": page,
         "kararlar": [_decision_row(x) for x in items],
@@ -322,6 +330,7 @@ async def yargitay_daire_listesi() -> dict[str, Any]:
 async def yargitay_karar_ara(
     aranan_kelime: str,
     karar_turu: str = "Yargıtay Kararı",
+    siralama: str = "alaka",
     daire: str = "",
     esas_yil: str = "",
     esas_ilk_sira_no: str = "",
@@ -338,7 +347,8 @@ async def yargitay_karar_ara(
 
     karar_turu: Yargıtay Kararı (varsayılan), Danıştay Kararı,
     Yerel Hukuk Mahkemesi Kararı, İstinaf Hukuk Mahkemesi Kararı veya
-    Kanun Yararına Bozma Kararları. Tarihler YYYY-AA-GG biçimindedir.
+    Kanun Yararına Bozma Kararları. siralama 'alaka' (varsayılan) veya
+    'tarih_yeniden_eskiye' olabilir. Tarihler YYYY-AA-GG biçimindedir.
     Yalnız Yargıtay aramalarında HGK, CGK veya ör. 3. Hukuk Dairesi için
     daire parametresini kullanın. Tam metin için sonuçtaki id değerini
     yargitay_karar_metni aracına aktarın.
@@ -364,6 +374,7 @@ async def yargitay_karar_metni(karar_id: str) -> dict[str, Any]:
 async def yargitay_toplu_arastirma(
     aranan_kelime: str,
     karar_turu: str = "Yargıtay Kararı",
+    siralama: str = "alaka",
     daire: str = "",
     sonuc_sayisi: int = 20,
     metin_sayisi: int = 1,
@@ -371,6 +382,7 @@ async def yargitay_toplu_arastirma(
 ) -> dict[str, Any]:
     """Bedesten'de arama yapar ve en fazla iki kararın tam metnini aynı çağrıda getirir.
 
+    siralama 'alaka' (varsayılan) veya 'tarih_yeniden_eskiye' seçilebilir.
     metin_bicimi='tam' tam metin; 'pencere' ilk 1800 karakteri döndürür.
     Kaynak hız sınırları nedeniyle metin_sayisi en fazla 2 olabilir.
     """
@@ -380,6 +392,7 @@ async def yargitay_toplu_arastirma(
     results = await _search({
         "aranan_kelime": aranan_kelime,
         "karar_turu": karar_turu,
+        "siralama": siralama,
         "daire": daire,
         "sayfa_boyutu": min(50, max(1, int(sonuc_sayisi))),
         "sayfa": 1,
