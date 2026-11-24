@@ -179,6 +179,12 @@ def _base_query(args: dict[str, Any]) -> dict[str, Any]:
         "sortFields": ["KARAR_TARIHI"],
         "sortDirection": "desc",
     }
+
+    _, unit_label = _unit_filter(str(args.get("daire") or ""))
+    if unit_label:
+        # Bedesten must narrow results before paging; local post-filtering can miss
+        # sparse units such as the Criminal General Assembly.
+        base["birimAdi"] = unit_label
     for key, field, label in (
         ("esas_yil", "esasNoYil", "Esas yılı"),
         ("karar_yil", "kararNoYil", "Karar yılı"),
@@ -228,62 +234,28 @@ async def _search(args: dict[str, Any]) -> dict[str, Any]:
     page_size = min(50, max(1, int(args.get("sayfa_boyutu") or args.get("sonuc_sayisi") or 10)))
     page = max(1, int(args.get("sayfa") or 1))
 
-    if not target:
-        result = await _post("/searchDocuments", {**base, "pageSize": page_size, "pageNumber": page}, paging=True)
-        items = result.get("emsalKararList")
-        if not isinstance(items, list):
-            raise RuntimeError("Bedesten arama yanıtında emsalKararList alanı bulunamadı.")
-        return {
-            "kaynak_sistemi": "Adalet Bakanlığı UYAP Mevzuat ve İçtihat / Bedesten",
-            "toplam_sonuc": int(result.get("total") or 0),
-            "sayfa": page,
-            "kararlar": [_decision_row(x) for x in items],
-        }
+    result = await _post(
+        "/searchDocuments",
+        {**base, "pageSize": page_size, "pageNumber": page},
+        paging=True,
+    )
+    items = result.get("emsalKararList")
+    if not isinstance(items, list):
+        raise RuntimeError("Bedesten arama yanıtında emsalKararList alanı bulunamadı.")
 
-    wanted = page_size * page
-    matches: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    source_total = 0
-    scanned_pages = 0
-    finished = False
-    for current in range(1, 21):
-        result = await _post("/searchDocuments", {**base, "pageSize": 50, "pageNumber": current}, paging=True)
-        items = result.get("emsalKararList")
-        if not isinstance(items, list):
-            raise RuntimeError("Bedesten arama yanıtında emsalKararList alanı bulunamadı.")
-        source_total = int(result.get("total") or 0)
-        scanned_pages = current
-        for item in items:
-            chamber = str(item.get("birimAdi") or item.get("birimAd") or item.get("daire") or "").strip().casefold()
-            if chamber == target.casefold() or chamber.endswith(" " + target.casefold()):
-                decision_id = str(item.get("documentId") or "")
-                if decision_id and decision_id not in seen:
-                    seen.add(decision_id)
-                    matches.append(_decision_row(item))
-        if len(items) < 50 or current * 50 >= source_total:
-            finished = True
-            break
-
-    offset = (page - 1) * page_size
-    return {
+    response: dict[str, Any] = {
         "kaynak_sistemi": "Adalet Bakanlığı UYAP Mevzuat ve İçtihat / Bedesten",
-        "toplam_sonuc": len(matches) if finished else None,
+        "toplam_sonuc": int(result.get("total") or 0),
         "sayfa": page,
-        "kararlar": matches[offset:offset + page_size],
-        "filtreleme": {
-            "daire": target,
-            "bulunan_eslesme": len(matches),
-            "taranan_sayfa": scanned_pages,
-            "taranan_kayit": scanned_pages * 50,
-            "kaynak_toplam_filtresiz": source_total,
-            "tarama_tamamlandi": finished,
-            "uyari": (
-                "Daire filtresi Bedesten sonuçlarına yerel olarak uygulandı."
-                if finished else
-                f"Daire filtresi ilk {scanned_pages * 50} kayıt üzerinde uygulandı; toplam filtreli kayıt sayısı henüz bilinmiyor."
-            ),
-        },
+        "kararlar": [_decision_row(x) for x in items],
     }
+    if target:
+        response["filtreleme"] = {
+            "daire": target,
+            "sunucu_tarafinda": True,
+            "bedesten_parametresi": "birimAdi",
+        }
+    return response
 
 
 def _html_to_text(raw_html: str) -> str:
