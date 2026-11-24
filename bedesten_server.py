@@ -62,6 +62,15 @@ DAIRELER = [
     *[f"{i}. Ceza Dairesi" for i in range(1, 24)],
 ]
 
+# UYAP Mevzuat web arayüzünün searchDocuments itemTypeList değerleri.
+KARAR_TURLERI: dict[str, str] = {
+    "Yargıtay Kararı": "YARGITAYKARARI",
+    "Danıştay Kararı": "DANISTAYKARAR",
+    "Yerel Hukuk Mahkemesi Kararı": "YERELHUKUK",
+    "İstinaf Hukuk Mahkemesi Kararı": "ISTINAFHUKUK",
+    "Kanun Yararına Bozma Kararları": "KYB",
+}
+
 _client: httpx.AsyncClient | None = None
 _client_lock = asyncio.Lock()
 _throttle_lock = asyncio.Lock()
@@ -173,9 +182,18 @@ def _base_query(args: dict[str, Any]) -> dict[str, Any]:
     phrase = _clean_phrase(args.get("aranan_kelime", ""))
     if not phrase:
         raise ValueError("Aranacak kelime/ifade boş olamaz.")
+    karar_turu = str(args.get("karar_turu") or "Yargıtay Kararı").strip()
+    item_type = KARAR_TURLERI.get(karar_turu)
+    if item_type is None:
+        raise ValueError(
+            "Tanınmayan karar_turu. Şunlardan birini kullanın: "
+            + ", ".join(KARAR_TURLERI)
+        )
+    if karar_turu != "Yargıtay Kararı" and str(args.get("daire") or "").strip():
+        raise ValueError("daire filtresi yalnızca Yargıtay Kararı aramalarında kullanılabilir.")
     base: dict[str, Any] = {
         "phrase": phrase,
-        "itemTypeList": ["YARGITAYKARARI"],
+        "itemTypeList": [item_type],
         "sortFields": ["KARAR_TARIHI"],
         "sortDirection": "desc",
     }
@@ -245,6 +263,7 @@ async def _search(args: dict[str, Any]) -> dict[str, Any]:
 
     response: dict[str, Any] = {
         "kaynak_sistemi": "Adalet Bakanlığı UYAP Mevzuat ve İçtihat / Bedesten",
+        "karar_turu": str(args.get("karar_turu") or "Yargıtay Kararı"),
         "toplam_sonuc": int(result.get("total") or 0),
         "sayfa": page,
         "kararlar": [_decision_row(x) for x in items],
@@ -302,6 +321,7 @@ async def yargitay_daire_listesi() -> dict[str, Any]:
 @mcp.tool
 async def yargitay_karar_ara(
     aranan_kelime: str,
+    karar_turu: str = "Yargıtay Kararı",
     daire: str = "",
     esas_yil: str = "",
     esas_ilk_sira_no: str = "",
@@ -314,10 +334,13 @@ async def yargitay_karar_ara(
     sayfa: int = 1,
     sayfa_boyutu: int = 10,
 ) -> dict[str, Any]:
-    """UYAP Bedesten'de Yargıtay kararlarını arar; künyeyi ve resmî karar bağlantısını döndürür.
+    """UYAP Bedesten'de seçilen karar türünde arar; künyeyi ve resmî bağlantıyı döndürür.
 
-    Tarihler YYYY-AA-GG biçiminde verilir. HGK, CGK veya ör. 3. Hukuk Dairesi
-    için daire parametresini kullanın. Tam metin için sonuçtaki id değerini
+    karar_turu: Yargıtay Kararı (varsayılan), Danıştay Kararı,
+    Yerel Hukuk Mahkemesi Kararı, İstinaf Hukuk Mahkemesi Kararı veya
+    Kanun Yararına Bozma Kararları. Tarihler YYYY-AA-GG biçimindedir.
+    Yalnız Yargıtay aramalarında HGK, CGK veya ör. 3. Hukuk Dairesi için
+    daire parametresini kullanın. Tam metin için sonuçtaki id değerini
     yargitay_karar_metni aracına aktarın.
     """
     args = locals()
@@ -340,6 +363,7 @@ async def yargitay_karar_metni(karar_id: str) -> dict[str, Any]:
 @mcp.tool
 async def yargitay_toplu_arastirma(
     aranan_kelime: str,
+    karar_turu: str = "Yargıtay Kararı",
     daire: str = "",
     sonuc_sayisi: int = 20,
     metin_sayisi: int = 1,
@@ -355,6 +379,7 @@ async def yargitay_toplu_arastirma(
     count = min(2, max(0, int(metin_sayisi)))
     results = await _search({
         "aranan_kelime": aranan_kelime,
+        "karar_turu": karar_turu,
         "daire": daire,
         "sayfa_boyutu": min(50, max(1, int(sonuc_sayisi))),
         "sayfa": 1,
