@@ -4,7 +4,7 @@ Bu depo, Adalet Bakanlığı UYAP Mevzuat ve İçtihat / Bedesten üzerinden Yar
 
 ## FastMCP sunucusu
 
-- **Entrypoint:** `bedesten_server.py:mcp`
+- **Entrypoint:** `main.py:mcp` (alternatif: `bedesten_server.py:mcp`)
 - **Bağımlılıklar:** `requirements.txt`
 - **Taşıma:** FastMCP Cloud/Gateway tarafından yönetilen uzak MCP (Streamable HTTP)
 - **MCP yolu:** `/mcp`
@@ -24,7 +24,7 @@ FastMCP Gateway kişisel projeler için ücretsiz plan sunduğunu resmî hızlı
 
 1. GitHub hesabıyla [FastMCP Gateway](https://horizon.prefect.io/) hesabına giriş yapın.
 2. **Create project / New project** bölümünden bu depoyu seçin.
-3. Server entrypoint alanına tam olarak `bedesten_server.py:mcp` yazın.
+3. Server entrypoint alanına `main.py:mcp` yazın.
 4. Build/deploy işlemini başlatın.
 5. Dağıtım tamamlandığında Gateway'in verdiği `https://....fastmcp.app/mcp` adresini kopyalayın.
 6. Bu adresi MCP destekleyen istemcinin uzak sunucu/connector ayarına ekleyin.
@@ -45,7 +45,7 @@ Yerel MCP adresi: `http://127.0.0.1:8000/mcp`
 - `YARGITAY_MIN_INTERVAL`: Bedesten'e gönderilen istekler arasındaki asgari bekleme süresi (saniye); varsayılan 2.
 - Arama tarihleri `YYYY-AA-GG` biçiminde verilmelidir.
 - Bedesten'in erişim sınırlaması (HTTP 429) uygulaması hâlinde araç hata döndürür; otomatik olarak sınırsız tekrar yapmaz.
-- Daireye göre filtreleme, Bedesten'in sonuç sayfaları üzerinde yerel olarak uygulanır. Çok fazla sonuçta tarama sınırı nedeniyle toplam filtreli sonuç sayısı kesinleşmeyebilir; araç bu durumu ayrıca bildirir.
+- Daire filtresi Bedesten aramasına `birimAdi` ile sunucu tarafında gönderilir. Varsayılan sıralama Bedesten'in alaka sıralamasıdır; `siralama="tarih_yeniden_eskiye"` ile tarih sıralaması seçilebilir.
 
 ## Doğrulama ilkesi
 
