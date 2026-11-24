@@ -27,6 +27,13 @@ class BedestenHelpersTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             server._base_query({"aranan_kelime": "   "})
 
+    def test_search_query_sends_unit_filter_to_bedesten(self):
+        query = server._base_query({
+            "aranan_kelime": "uyuşturucu",
+            "daire": "Ceza Genel Kurulu",
+        })
+        self.assertEqual(query["birimAdi"], "Ceza Genel Kurulu")
+
     def test_search_query_keeps_exact_year_and_number_filters(self):
         query = server._base_query({
             "aranan_kelime": "sulh ile elde edilen menfaat",
